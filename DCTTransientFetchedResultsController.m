@@ -7,6 +7,7 @@
 //
 
 #import "DCTTransientFetchedResultsController.h"
+#import <objc/runtime.h>
 
 @interface DCTTransientFetchedResultsControllerSectionInfo : NSObject
 @property (nonatomic, strong, readwrite) NSString *indexTitle;
@@ -22,13 +23,26 @@
 @synthesize objects;
 @end
 
+static void *observingContext = &observingContext;
+
 @interface DCTTransientFetchedResultsController () <NSFetchedResultsControllerDelegate>
+- (NSArray *)dctInternal_propertiesOfClass:(Class)class;
+- (void)dctInternal_observeObject:(id)object;
+- (void)dctInternal_stopObservingObject:(id)object;
 @end
 
 @implementation DCTTransientFetchedResultsController {
 	__strong NSFetchedResultsController *fetchedResultsController;
 	__strong NSMutableArray *fetchedObjects;
 	__strong NSPredicate *transientPredicate;
+	
+	__strong NSMutableDictionary *watchableKeys;
+	__strong NSMutableArray *observingObjects;
+}
+
+- (void)dealloc {
+	for (id object in [observingObjects copy])
+		[self dctInternal_stopObservingObject:object];
 }
 
 - (id)initWithFetchRequest:(NSFetchRequest *)fetchRequest 
@@ -57,6 +71,10 @@
 	if (![fetchedResultsController performFetch:error]) return NO;
 	
 	fetchedObjects = [fetchedResultsController.fetchedObjects mutableCopy];
+	
+	for (id object in fetchedObjects)
+		[self dctInternal_observeObject:object];
+	
 	[fetchedObjects filterUsingPredicate:self.transientPredicate];
 	
 	return YES;
@@ -123,6 +141,12 @@
 	 forChangeType:(NSFetchedResultsChangeType)type
 	  newIndexPath:(NSIndexPath *)newIndexPath {
 	
+	
+	if (type == NSFetchedResultsChangeInsert)
+		[self dctInternal_observeObject:object];
+	else if (type == NSFetchedResultsChangeDelete)
+		[self dctInternal_stopObservingObject:object];
+	
 	if (![(NSObject *)self.delegate respondsToSelector:@selector(controller:didChangeObject:atIndexPath:forChangeType:newIndexPath:)])
 		return;
 	
@@ -130,6 +154,8 @@
 		return;
 	
 	if (type == NSFetchedResultsChangeInsert) {
+		
+		[self dctInternal_observeObject:object];
 		
 		[fetchedObjects addObject:object];
 		[fetchedObjects sortUsingDescriptors:self.fetchRequest.sortDescriptors];
@@ -175,6 +201,105 @@
 	}
 	
 	
+	
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+	
+	if (context != observingContext)
+		return [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+	
+	BOOL shouldExist = [self.transientPredicate evaluateWithObject:object];
+	NSUInteger index = [fetchedObjects indexOfObject:object];
+	BOOL doesExist = (index != NSNotFound);
+	
+	if (shouldExist == doesExist) return;
+	
+	[self controllerWillChangeContent:nil];
+	
+	NSFetchedResultsChangeType type = NSFetchedResultsChangeInsert;
+	NSIndexPath *indexPath = nil;
+	NSIndexPath *newIndexPath = nil;
+	
+	if (shouldExist) {
+		[fetchedObjects addObject:object];
+		[fetchedObjects sortUsingDescriptors:self.fetchRequest.sortDescriptors];
+		NSUInteger newIndex = [fetchedObjects indexOfObject:object];
+		newIndexPath = [NSIndexPath indexPathForRow:newIndex inSection:0];
+	
+	} else {
+		
+		type = NSFetchedResultsChangeDelete;
+		[fetchedObjects removeObject:object];
+		indexPath = [NSIndexPath indexPathForRow:index inSection:0];
+		
+	}
+	
+	if ([(NSObject *)self.delegate respondsToSelector:@selector(controller:didChangeObject:atIndexPath:forChangeType:newIndexPath:)]) {
+		
+		[self.delegate controller:self
+				  didChangeObject:object
+					  atIndexPath:indexPath
+					forChangeType:type
+					 newIndexPath:newIndexPath];
+	}
+	
+	[self controllerDidChangeContent:nil];
+}
+
+- (void)dctInternal_stopObservingObject:(id)object {
+	
+	[observingObjects removeObject:object];
+	
+	NSArray *keys = [self dctInternal_propertiesOfClass:[object class]];
+	
+	for (NSString *key in keys)
+		[object removeObserver:self forKeyPath:key context:observingContext];
+}
+
+- (void)dctInternal_observeObject:(id)object {
+	
+	if (!observingObjects) observingObjects = [[NSMutableArray alloc] initWithCapacity:50];
+	
+	[observingObjects addObject:object];
+	
+	NSArray *keys = [self dctInternal_propertiesOfClass:[object class]];
+	
+	for (NSString *key in keys)
+		[object addObserver:self forKeyPath:key options:NSKeyValueObservingOptionNew context:observingContext];
+}
+
+- (NSArray *)dctInternal_propertiesOfClass:(Class)class {
+	
+	NSArray *keys = [watchableKeys objectForKey:NSStringFromClass(class)];
+	
+	if (keys) 
+		return keys;
+	
+	NSMutableArray *array = [[NSMutableArray alloc] init];
+	
+	NSUInteger outCount;
+	
+	objc_property_t *properties = class_copyPropertyList(class, &outCount);
+	
+	for (NSUInteger i = 0; i < outCount; i++) {
+		objc_property_t property = properties[i];
+		const char *propertyName = property_getName(property);
+		NSString *nameString = [[NSString alloc] initWithCString:propertyName encoding:NSUTF8StringEncoding];
+		
+		if ([self.transientPredicate.predicateFormat rangeOfString:nameString].location != NSNotFound)
+			[array addObject:nameString];
+	}
+	
+	free(properties);
+	
+	keys = [array copy];
+	
+	if (!watchableKeys) watchableKeys = [[NSMutableDictionary alloc] initWithCapacity:5];
+	
+	[watchableKeys setObject:keys forKey:NSStringFromClass(class)];
+	
+	return keys;
 	
 }
 
