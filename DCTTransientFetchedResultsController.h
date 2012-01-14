@@ -9,4 +9,13 @@
 #import <CoreData/CoreData.h>
 
 @interface DCTTransientFetchedResultsController : NSFetchedResultsController
+
+- (id)initWithFetchRequest:(NSFetchRequest *)fetchRequest 
+	  managedObjectContext:(NSManagedObjectContext *)context
+		sectionNameKeyPath:(NSString *)sectionNameKeyPath
+				 cacheName:(NSString *)name 
+		transientPredicate:(NSPredicate *)transientPredicate;
+
+@property (nonatomic, readonly) NSPredicate *transientPredicate;
+
 @end
