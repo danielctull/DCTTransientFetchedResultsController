@@ -8,6 +8,7 @@
 
 #import "DCTTransientFetchedResultsController.h"
 #import <objc/runtime.h>
+#import <UIKit/UIKit.h>
 
 @interface DCTTransientFetchedResultsControllerSectionInfo : NSObject
 @property (nonatomic, strong, readwrite) NSString *indexTitle;
