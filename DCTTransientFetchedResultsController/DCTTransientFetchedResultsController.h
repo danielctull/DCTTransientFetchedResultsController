@@ -6,7 +6,7 @@
 //  Copyright (c) 2012 Daniel Tull Limited. All rights reserved.
 //
 
-#import <CoreData/CoreData.h>
+@import CoreData;
 
 @interface DCTTransientFetchedResultsController : NSFetchedResultsController
 

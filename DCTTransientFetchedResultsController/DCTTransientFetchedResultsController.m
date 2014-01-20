@@ -151,7 +151,19 @@ static void *observingContext = &observingContext;
 	if (![(NSObject *)self.delegate respondsToSelector:@selector(controller:didChangeObject:atIndexPath:forChangeType:newIndexPath:)])
 		return;
 	
-	if (![self.transientPredicate evaluateWithObject:object]) 
+	if (![self.transientPredicate evaluateWithObject:object] && [fetchedObjects containsObject:object]) {
+
+		NSUInteger index = [fetchedObjects indexOfObject:object];
+		[fetchedObjects removeObject:object];
+
+		[self.delegate controller:self
+				  didChangeObject:object
+					  atIndexPath:[NSIndexPath indexPathForRow:index inSection:0]
+					forChangeType:NSFetchedResultsChangeDelete
+					 newIndexPath:nil];
+	}
+
+	if (![self.transientPredicate evaluateWithObject:object])
 		return;
 	
 	if (type == NSFetchedResultsChangeInsert) {
@@ -193,6 +205,20 @@ static void *observingContext = &observingContext;
 	} else if (type == NSFetchedResultsChangeUpdate) {
 		
 		NSUInteger index = [fetchedObjects indexOfObject:object];
+		if (index == NSNotFound) {
+			[self dctInternal_observeObject:object];
+			[fetchedObjects addObject:object];
+			[fetchedObjects sortUsingDescriptors:self.fetchRequest.sortDescriptors];
+			index = [fetchedObjects indexOfObject:object];
+
+			[self.delegate controller:self
+					  didChangeObject:object
+						  atIndexPath:nil
+						forChangeType:NSFetchedResultsChangeInsert
+						 newIndexPath:[NSIndexPath indexPathForRow:index inSection:0]];
+			return;
+		}
+
 		[self.delegate controller:self 
 				  didChangeObject:object
 					  atIndexPath:[NSIndexPath indexPathForRow:index inSection:0]
@@ -279,7 +305,7 @@ static void *observingContext = &observingContext;
 	
 	NSMutableArray *array = [[NSMutableArray alloc] init];
 	
-	NSUInteger outCount;
+	unsigned int outCount;
 	
 	objc_property_t *properties = class_copyPropertyList(class, &outCount);
 	
