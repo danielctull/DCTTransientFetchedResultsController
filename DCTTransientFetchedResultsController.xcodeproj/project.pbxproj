@@ -104,7 +104,7 @@
 		241EE09215C733F500CB9C52 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0450;
+				LastUpgradeCheck = 0500;
 				ORGANIZATIONNAME = "Daniel Tull";
 			};
 			buildConfigurationList = 241EE09515C733F500CB9C52 /* Build configuration list for PBXProject "DCTTransientFetchedResultsController" */;
@@ -160,6 +160,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 6.0;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				WARNING_CFLAGS = (
 					"-Wno-objc-missing-property-synthesis",
