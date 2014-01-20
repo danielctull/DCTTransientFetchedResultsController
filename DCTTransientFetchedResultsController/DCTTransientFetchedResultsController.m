@@ -58,6 +58,12 @@
     return [self.filteredFetchedObjects objectAtIndex:indexPath.row];
 }
 
+- (NSIndexPath *)indexPathForObject:(id)object {
+	NSUInteger index = [self.fetchedObjects indexOfObject:object];
+	if (index == NSNotFound) return nil;
+	return [NSIndexPath indexPathForRow:index inSection:0];
+}
+
 - (NSArray *)fetchedObjects {
     return [self.filteredFetchedObjects copy];
 }
@@ -97,6 +103,59 @@
 	return @[info];
 }
 
+- (void)deleteObject:(id)object {
+
+	NSIndexPath *indexPath = [self indexPathForObject:object];
+	[self.filteredFetchedObjects removeObject:object];
+
+	[self.delegate controller:self
+			  didChangeObject:object
+				  atIndexPath:indexPath
+				forChangeType:NSFetchedResultsChangeDelete
+				 newIndexPath:nil];
+}
+
+- (void)insertObject:(id)object {
+
+	[self.filteredFetchedObjects addObject:object];
+	[self.filteredFetchedObjects sortUsingDescriptors:self.fetchRequest.sortDescriptors];
+	NSIndexPath *indexPath = [self indexPathForObject:object];
+	
+	[self.delegate controller:self
+			  didChangeObject:object
+				  atIndexPath:nil
+				forChangeType:NSFetchedResultsChangeInsert
+				 newIndexPath:indexPath];
+}
+
+- (void)moveObject:(id)object {
+
+	NSIndexPath *indexPath = [self indexPathForObject:object];
+	[self.filteredFetchedObjects sortUsingDescriptors:self.fetchRequest.sortDescriptors];
+	NSIndexPath *newIndexPath = [self indexPathForObject:object];
+
+	[self.delegate controller:self
+			  didChangeObject:object
+				  atIndexPath:indexPath
+				forChangeType:NSFetchedResultsChangeMove
+				 newIndexPath:newIndexPath];
+}
+
+- (void)updateObject:(id)object {
+
+	NSIndexPath *indexPath = [self indexPathForObject:object];
+	if (!indexPath) {
+		[self insertObject:object];
+		return;
+	}
+
+	[self.delegate controller:self
+			  didChangeObject:object
+				  atIndexPath:indexPath
+				forChangeType:NSFetchedResultsChangeUpdate
+				 newIndexPath:nil];
+}
+
 #pragma mark - NSFetchedResultsControllerDelegate
 
 - (void)controllerWillChangeContent:(NSFetchedResultsController *)controller {
@@ -117,82 +176,32 @@
 
 	if (![(NSObject *)self.delegate respondsToSelector:@selector(controller:didChangeObject:atIndexPath:forChangeType:newIndexPath:)])
 		return;
+
+	BOOL valid = [self.transientPredicate evaluateWithObject:object];
 	
-	if (![self.transientPredicate evaluateWithObject:object] && [self.filteredFetchedObjects containsObject:object]) {
+	if (!valid && [self.filteredFetchedObjects containsObject:object])
+		[self deleteObject:object];
 
-		NSUInteger index = [self.filteredFetchedObjects indexOfObject:object];
-		[self.filteredFetchedObjects removeObject:object];
-
-		[self.delegate controller:self
-				  didChangeObject:object
-					  atIndexPath:[NSIndexPath indexPathForRow:index inSection:0]
-					forChangeType:NSFetchedResultsChangeDelete
-					 newIndexPath:nil];
-	}
-
-	if (![self.transientPredicate evaluateWithObject:object])
+	if (!valid)
 		return;
-	
-	if (type == NSFetchedResultsChangeInsert) {
-		
-		[self.filteredFetchedObjects addObject:object];
-		[self.filteredFetchedObjects sortUsingDescriptors:self.fetchRequest.sortDescriptors];
-		
-		[self.delegate controller:self 
-				  didChangeObject:object
-					  atIndexPath:nil
-					forChangeType:type
-					 newIndexPath:[NSIndexPath indexPathForRow:[self.fetchedObjects indexOfObject:object] inSection:0]];
-	
-	} else if (type == NSFetchedResultsChangeDelete) {
-		
-		NSUInteger index = [self.filteredFetchedObjects indexOfObject:object];
-		[self.filteredFetchedObjects removeObject:object];
-		
-		[self.delegate controller:self 
-				  didChangeObject:object
-					  atIndexPath:[NSIndexPath indexPathForRow:index inSection:0]
-					forChangeType:type
-					 newIndexPath:nil];
-	
-	} else if (type == NSFetchedResultsChangeMove) {
-		
-		NSUInteger index = [self.filteredFetchedObjects indexOfObject:object];
-		[self.filteredFetchedObjects sortUsingDescriptors:self.fetchRequest.sortDescriptors];
-		NSUInteger newIndex = [self.filteredFetchedObjects indexOfObject:object];
-		
-		[self.delegate controller:self 
-				  didChangeObject:object
-					  atIndexPath:[NSIndexPath indexPathForRow:index inSection:0]
-					forChangeType:type
-					 newIndexPath:[NSIndexPath indexPathForRow:newIndex inSection:0]];
-		
-	} else if (type == NSFetchedResultsChangeUpdate) {
-		
-		NSUInteger index = [self.filteredFetchedObjects indexOfObject:object];
-		if (index == NSNotFound) {
-			[self.filteredFetchedObjects addObject:object];
-			[self.filteredFetchedObjects sortUsingDescriptors:self.fetchRequest.sortDescriptors];
-			index = [self.filteredFetchedObjects indexOfObject:object];
 
-			[self.delegate controller:self
-					  didChangeObject:object
-						  atIndexPath:nil
-						forChangeType:NSFetchedResultsChangeInsert
-						 newIndexPath:[NSIndexPath indexPathForRow:index inSection:0]];
-			return;
-		}
+	switch (type) {
+		case NSFetchedResultsChangeInsert:
+			[self insertObject:object];
+			break;
 
-		[self.delegate controller:self 
-				  didChangeObject:object
-					  atIndexPath:[NSIndexPath indexPathForRow:index inSection:0]
-					forChangeType:type
-					 newIndexPath:nil];
-		
+		case NSFetchedResultsChangeDelete:
+			[self deleteObject:object];
+			break;
+
+		case NSFetchedResultsChangeMove:
+			[self moveObject:object];
+			break;
+
+		case NSFetchedResultsChangeUpdate:
+			[self updateObject:object];
+			break;
 	}
-	
-	
-	
 }
 
 @end
