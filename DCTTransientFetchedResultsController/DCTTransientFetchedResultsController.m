@@ -28,8 +28,6 @@
 
 - (instancetype)initWithFetchRequest:(NSFetchRequest *)fetchRequest
 				managedObjectContext:(NSManagedObjectContext *)context
-				  sectionNameKeyPath:(NSString *)sectionNameKeyPath
-						   cacheName:(NSString *)name
 				  transientPredicate:(NSPredicate *)transientPredicate {
 
 	self = [self init];
@@ -38,8 +36,8 @@
 	_transientPredicate = transientPredicate;
 	_fetchedResultsController = [[NSFetchedResultsController alloc] initWithFetchRequest:fetchRequest
 																	managedObjectContext:context
-																	  sectionNameKeyPath:sectionNameKeyPath
-																			   cacheName:name];
+																	  sectionNameKeyPath:nil
+																			   cacheName:nil];
 	_fetchedResultsController.delegate = self;
 	return self;
 }
